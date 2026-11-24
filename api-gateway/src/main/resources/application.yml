@@ -1,0 +1,81 @@
+# ---------- API Gateway: puerta de entrada única del backend ----------
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      # CORS: el navegador (frontend en Vite) solo habla con el gateway
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - http://localhost:5173
+              - http://127.0.0.1:5173
+            allowed-methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+            allowed-headers: [Authorization, Content-Type]
+      # Los microservicios también responden encabezados CORS: se deja uno solo de cada tipo
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials Vary, RETAIN_UNIQUE
+      # Rutas: según el comienzo de la URL se elige el microservicio.
+      # "lb://nombre" significa: buscar ese nombre en Eureka (con balanceo de carga)
+      routes:
+        - id: ms-usuarios
+          uri: lb://ms-usuarios
+          predicates:
+            - Path=/api/auth/**,/api/usuarios/**
+        - id: ms-productos
+          uri: lb://ms-productos
+          predicates:
+            - Path=/api/productos/**,/api/categorias/**
+        - id: ms-ordenes
+          uri: lb://ms-ordenes
+          predicates:
+            - Path=/api/ordenes/**
+        # Documentación OpenAPI de cada microservicio, para el Swagger unificado
+        - id: docs-ms-usuarios
+          uri: lb://ms-usuarios
+          predicates:
+            - Path=/docs/ms-usuarios
+          filters:
+            - RewritePath=/docs/ms-usuarios, /v3/api-docs
+        - id: docs-ms-productos
+          uri: lb://ms-productos
+          predicates:
+            - Path=/docs/ms-productos
+          filters:
+            - RewritePath=/docs/ms-productos, /v3/api-docs
+        - id: docs-ms-ordenes
+          uri: lb://ms-ordenes
+          predicates:
+            - Path=/docs/ms-ordenes
+          filters:
+            - RewritePath=/docs/ms-ordenes, /v3/api-docs
+    loadbalancer:
+      cache:
+        ttl: 5s
+
+# ---------- Eureka ----------
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    registry-fetch-interval-seconds: 5
+  instance:
+    hostname: localhost
+    lease-renewal-interval-in-seconds: 5
+
+# ---------- Swagger unificado: http://localhost:8080/swagger-ui.html ----------
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: ms-usuarios
+        url: /docs/ms-usuarios
+      - name: ms-productos
+        url: /docs/ms-productos
+      - name: ms-ordenes
+        url: /docs/ms-ordenes
+    urls-primary-name: ms-usuarios
